@@ -35,7 +35,7 @@ firmware-genflags-y += -DFW_FDT_PADDING=$(FW_FDT_PADDING)
 endif
 endif
 
-firmware-bins-$(FW_DYNAMIC) += fw_dynamic.bin
+#firmware-bins-$(FW_DYNAMIC) += fw_dynamic.bin
 
 firmware-bins-$(FW_JUMP) += fw_jump.bin
 ifdef FW_JUMP_ADDR
@@ -66,3 +66,12 @@ endif
 ifdef FW_OPTIONS
 firmware-genflags-y += -DFW_OPTIONS=$(FW_OPTIONS)
 endif
+
+ifdef TYCHE_SM_PATH
+TYCHE_SM_PATH_FINAL=$(TYCHE_SM_PATH)
+else
+TYCHE_SM_PATH_FINAL=/home/neelu/riscv-hmode-setup/tyche_sm/target/riscv-unknown-kernel/debug/tyche_sm
+endif
+firmware-genflags-$(FW_PAYLOAD) += -DTYCHE_SM_PATH=\"$(TYCHE_SM_PATH_FINAL)\"
+firmware-genflags-$(FW_PAYLOAD) += -DTYCHE_SM_OFFSET=0x300000
+

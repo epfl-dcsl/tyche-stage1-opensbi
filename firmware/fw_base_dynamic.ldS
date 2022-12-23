@@ -38,11 +38,11 @@
 		*(.rodata .rodata.*)
 		. = ALIGN(8);
 		PROVIDE(_rodata_end = .);
-		. = ALIGN(16);
+		//Neelu: Temporarily adding - not useful, just to ensure fw_dynamic builds.
+		. = ALIGN(8);
 		PROVIDE(_tyche_start = .);
-                *(.tyche)
-                . = ALIGN(8);
-                PROVIDE(_tyche_end = .);
+		. = ALIGN(8);
+		PROVIDE(_tyche_end = .);
 	}
 
 	/* End of the read-only data sections */

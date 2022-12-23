@@ -12,7 +12,7 @@ ENTRY(_start)
 
 SECTIONS
 {
-	#include "fw_base.ldS"
+	#include "fw_base_dynamic.ldS"
 
 	PROVIDE(_fw_reloc_end = .);
 }

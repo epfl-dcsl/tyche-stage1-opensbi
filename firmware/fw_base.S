@@ -17,6 +17,8 @@
 #define BOOT_STATUS_RELOCATE_DONE	1
 #define BOOT_STATUS_BOOT_HART_DONE	2
 
+#define TYCHE_SM
+
 .macro	MOV_3R __d0, __s0, __d1, __s1, __d2, __s2
 	add	\__d0, \__s0, zero
 	add	\__d1, \__s1, zero
@@ -336,6 +338,20 @@ _scratch_init:
 #endif
 	REG_S	a0, SBI_SCRATCH_OPTIONS_OFFSET(tp)
 	MOV_3R	a0, s0, a1, s1, a2, s2
+	
+#ifdef TYCHE_SM
+	/* Store tyche sm address in scratch space */
+        MOV_3R  s0, a0, s1, a1, s2, a2
+        call    tyche_sm_addr
+        REG_S   a0, SBI_SCRATCH_TYCHE_SM_ADDR_OFFSET(tp)
+        MOV_3R  a0, s0, a1, s1, a2, s2
+        /* Store tyche sm mode in scratch space */
+        MOV_3R  s0, a0, s1, a1, s2, a2
+        call    tyche_sm_mode
+        REG_S   a0, SBI_SCRATCH_TYCHE_SM_MODE_OFFSET(tp)
+        MOV_3R  a0, s0, a1, s1, a2, s2
+#endif
+
 	/* Move to next scratch space */
 	add	t1, t1, t2
 	blt	t1, s7, _scratch_init

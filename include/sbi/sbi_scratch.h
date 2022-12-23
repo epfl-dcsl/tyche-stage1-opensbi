@@ -10,6 +10,8 @@
 #ifndef __SBI_SCRATCH_H__
 #define __SBI_SCRATCH_H__
 
+#define TYCHE_SM
+
 #include <sbi/riscv_asm.h>
 
 /* clang-format off */
@@ -36,8 +38,23 @@
 #define SBI_SCRATCH_TMP0_OFFSET			(9 * __SIZEOF_POINTER__)
 /** Offset of options member in sbi_scratch */
 #define SBI_SCRATCH_OPTIONS_OFFSET		(10 * __SIZEOF_POINTER__)
+
+#ifdef TYCHE_SM
+
+/** Offset of tyche_sm_addr member in sbi_scratch*/ 
+#define SBI_SCRATCH_TYCHE_SM_ADDR_OFFSET	(11 * __SIZEOF_POINTER__)
+/** Offset of tyche_sm_mode member in sbi_scratch */
+#define SBI_SCRATCH_TYCHE_SM_MODE_OFFSET	(12 * __SIZEOF_POINTER__)
+/** Offset of extra space in sbi_scratch */
+#define SBI_SCRATCH_EXTRA_SPACE_OFFSET          (13 * __SIZEOF_POINTER__)
+
+#else
+
 /** Offset of extra space in sbi_scratch */
 #define SBI_SCRATCH_EXTRA_SPACE_OFFSET		(11 * __SIZEOF_POINTER__)
+
+#endif
+
 /** Maximum size of sbi_scratch (4KB) */
 #define SBI_SCRATCH_SIZE			(0x1000)
 
@@ -71,6 +88,10 @@ struct sbi_scratch {
 	unsigned long tmp0;
 	/** Options for OpenSBI library */
 	unsigned long options;
+	/** Address of tyche sm for this HART */
+        unsigned long tyche_sm_addr;
+        /** Privilege mode of tyche sm for this HART */
+        unsigned long tyche_sm_mode;
 };
 
 /**
@@ -132,6 +153,17 @@ _Static_assert(
 		== SBI_SCRATCH_OPTIONS_OFFSET,
 	"struct sbi_scratch definition has changed, please redefine "
 	"SBI_SCRATCH_OPTIONS_OFFSET");
+_Static_assert(
+        offsetof(struct sbi_scratch, tyche_sm_addr)
+                == SBI_SCRATCH_TYCHE_SM_ADDR_OFFSET,
+        "struct sbi_scratch definition has changed, please redefine "
+        "SBI_SCRATCH_TYCHE_SM_ADDR_OFFSET");
+_Static_assert(
+        offsetof(struct sbi_scratch, tyche_sm_mode)
+                == SBI_SCRATCH_TYCHE_SM_MODE_OFFSET,
+        "struct sbi_scratch definition has changed, please redefine "
+        "SBI_SCRATCH_TYCHE_SM_MODE_OFFSET");
+
 
 /** Possible options for OpenSBI library */
 enum sbi_scratch_options {

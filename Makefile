@@ -58,6 +58,7 @@ endif
 
 # Check if verbosity is ON for build process
 CMD_PREFIX_DEFAULT := @
+V=1
 ifeq ($(V), 1)
 	CMD_PREFIX :=
 else
@@ -341,8 +342,17 @@ CFLAGS		+=	-mcmodel=$(PLATFORM_RISCV_CODE_MODEL)
 CFLAGS		+=	$(RELAX_FLAG)
 CFLAGS		+=	$(GENFLAGS)
 CFLAGS		+=	$(platform-cflags-y)
+#Neelu: Commenting 
 CFLAGS		+=	-fno-pie -no-pie
 CFLAGS		+=	$(firmware-cflags-y)
+
+#Neelu: 
+CFLAGS 		+= 	-fpic
+#CFLAGS		+= 	-I/home/neelu/riscv-hmode-setup/
+#CFLAGS          +=      -I/home/neelu/riscv-hmode-setup/tyche_lib -ltyche -L/home/neelu/riscv-hmode-setup/tyche_lib /home/neelu/riscv-hmode-setup/tyche_lib/libtyche.a
+#CFLAGS		+=	-I/home/neelu/riscv-hmode-setup/tyche_lib -ltyche -L/home/neelu/riscv-hmode-setup/tyche_lib
+ 
+#CFLAGS         +=      -l libtyche -L /home/neelu/riscv-hmode-setup/tyche_lib
 
 CPPFLAGS	+=	$(GENFLAGS)
 CPPFLAGS	+=	$(platform-cppflags-y)

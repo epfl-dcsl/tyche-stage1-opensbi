@@ -27,6 +27,14 @@
 #include <sbi/sbi_tlb.h>
 #include <sbi/sbi_version.h>
 
+#include <sbi_elf.c>
+
+#define N_DBG
+
+extern int tyche_sm_bin;
+
+typedef void tyche_start(unsigned long, unsigned long, unsigned long, unsigned long); 
+
 #define BANNER                                              \
 	"   ____                    _____ ____ _____\n"     \
 	"  / __ \\                  / ____|  _ \\_   _|\n"  \
@@ -351,6 +359,31 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	(*init_count)++;
 
 	sbi_hsm_prepare_next_jump(scratch, hartid);
+
+	sbi_printf("\n-----------------FW_JUMP_ADDR: %lx to mode %ld, TYCHE_SM_START_CONTENT %x, TYCHE_SM_START_ADDR %p -------------------\n", scratch->next_addr, scratch->next_mode, tyche_sm_bin, &tyche_sm_bin); 
+
+#ifdef N_DBG
+	uintptr_t tyche_entry = parse_and_load_elf(&tyche_sm_bin, (void*)0x80100000);
+
+	//TODO: Need to assign pointer to function 
+
+	((void (*) (arg types))tyche_start)(hart_id, scratch->next_arg1, scratch->next_addr,
+                             scratch->next_mode);
+
+	long r;
+	//sbi_printf("\n-----------------TYCHE_JUMP_ADDR: %lx to mode %ld-------------------\n", scratch->tyche_sm_addr, scratch->tyche_sm_mode);
+	//sbi_printf("\n------------------ %d ------------------- \n",tyche_init());
+	__asm__ __volatile__ (
+		//"la t1, %0\n\t" 
+		"jalr t0, %1, 0x0\n\t" 
+		: "=r"(r)
+		: "r"(tyche_entry)				      
+		: "t0");
+	
+	//Neelu: scratch->tyche_sm_addr contains the addr where tyche elf is in the fw bin, need to provide the entry_point of tyche viz available in the header. 
+	//sbi_hart_switch_mode(hartid, scratch->next_arg1, tyche_entry,
+         //                    scratch->tyche_sm_mode, FALSE);
+#endif
 	sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr,
 			     scratch->next_mode, FALSE);
 }

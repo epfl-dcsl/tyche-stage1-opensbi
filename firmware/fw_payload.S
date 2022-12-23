@@ -85,13 +85,55 @@ fw_options:
 	add	a0, zero, zero
 	ret
 
+	.section .entry, "ax", %progbits
+        .align 3
+        .global tyche_sm_addr
+        
+	/*
+         * We can only use a0, a1, and a2 registers here.
+         * Tyche sm address should be returned in 'a0'.
+         */
+tyche_sm_addr:
+        lla     a0, tyche_sm_bin
+	ret
+
+        .section .entry, "ax", %progbits
+        .align 3
+        .global tyche_sm_mode
+        /*
+         * We can only use a0, a1, and a2 registers here.
+         * The Tyche sm mode should be returned in 'a0'.
+         */
+tyche_sm_mode:
+        li      a0, PRV_M
+        ret
+
+        /*
+         * We can only use a0, a1, and a2 registers here.
+         * The 'a4' register will have default options.
+         * The next address should be returned in 'a0'.
+         */
+
 	.section .payload, "ax", %progbits
 	.align 4
 	.globl payload_bin
 payload_bin:
+	//.incbin TYCHE_SM_PATH
 #ifndef FW_PAYLOAD_PATH
 	wfi
 	j	payload_bin
 #else
 	.incbin	FW_PAYLOAD_PATH
 #endif
+
+	.section .tyche
+	.align 4
+	.globl tyche_sm_bin
+tyche_sm_bin:
+#ifndef TYCHE_SM_PATH
+	wfi
+	j	tyche_sm_bin
+#else
+	.incbin TYCHE_SM_PATH
+#endif
+
