@@ -33,7 +33,7 @@
 
 extern int tyche_sm_bin;
 
-typedef void tyche_start(unsigned long, unsigned long, unsigned long, unsigned long); 
+//typedef void tyche_start(unsigned long, unsigned long, unsigned long, unsigned long); 
 
 #define BANNER                                              \
 	"   ____                    _____ ____ _____\n"     \
@@ -367,25 +367,36 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	//TODO: Need to assign pointer to function 
 
-	((void (*) (arg types))tyche_start)(hart_id, scratch->next_arg1, scratch->next_addr,
+	sbi_printf("\nARGS for TYCHE_SM: hartid: %d , arg1: %lx, next_addr: %lx, next_mode: %ld \n", hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
+
+	void* tyche_start = (void*)tyche_entry;
+
+	((void (*) (unsigned long, unsigned long, unsigned long, unsigned long))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr,
                              scratch->next_mode);
 
-	long r;
+	__builtin_unreachable();
+
+	//long r; TODO: Commented temporaririly to test the pointer to function cast.
+	
 	//sbi_printf("\n-----------------TYCHE_JUMP_ADDR: %lx to mode %ld-------------------\n", scratch->tyche_sm_addr, scratch->tyche_sm_mode);
 	//sbi_printf("\n------------------ %d ------------------- \n",tyche_init());
-	__asm__ __volatile__ (
+	
+	// TODO: Commented temporaririly to test the pointer to function cast. If it works, this won't be needed. 
+	/* __asm__ __volatile__ (
 		//"la t1, %0\n\t" 
 		"jalr t0, %1, 0x0\n\t" 
 		: "=r"(r)
 		: "r"(tyche_entry)				      
 		: "t0");
+	*/
 	
 	//Neelu: scratch->tyche_sm_addr contains the addr where tyche elf is in the fw bin, need to provide the entry_point of tyche viz available in the header. 
 	//sbi_hart_switch_mode(hartid, scratch->next_arg1, tyche_entry,
          //                    scratch->tyche_sm_mode, FALSE);
 #endif
-	sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr,
-			     scratch->next_mode, FALSE);
+	//TODO: Commented temporaririly to test the pointer to function cast.
+	//sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr,
+	//			     scratch->next_mode, FALSE);
 }
 
 static void init_warm_startup(struct sbi_scratch *scratch, u32 hartid)
