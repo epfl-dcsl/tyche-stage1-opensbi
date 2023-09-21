@@ -279,6 +279,8 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	if (rc)
 		sbi_hart_hang();
 
+    sbi_printf("\n ========= scratch->next_addr: %lx ========= \n", scratch->next_addr);
+
 	rc = sbi_pmu_init(scratch, TRUE);
 	if (rc)
 		sbi_hart_hang();
@@ -363,9 +365,12 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	sbi_printf("\n-----------------FW_JUMP_ADDR: %lx to mode %ld, TYCHE_SM_START_CONTENT %x, TYCHE_SM_START_ADDR %p -------------------\n", scratch->next_addr, scratch->next_mode, tyche_sm_bin, &tyche_sm_bin); 
 
 #ifdef N_DBG
-	uintptr_t tyche_entry = parse_and_load_elf(&tyche_sm_bin, (void*)0x80100000);
+	uintptr_t tyche_entry = parse_and_load_elf(&tyche_sm_bin, (void*)0x80250000);
 
 	//TODO: Need to assign pointer to function 
+
+    //NEELU: Rewriting scratch->next_addr -> This needs to be done properly by propagating the correct next_addr from the beginning. Check in lib/utils/fdt/fdt_domain.c 
+    scratch->next_addr = 0x80400000; 
 
 	sbi_printf("\nARGS for TYCHE_SM: hartid: %d , arg1: %lx, next_addr: %lx, next_mode: %ld \n", hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
 
