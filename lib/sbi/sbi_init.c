@@ -29,7 +29,9 @@
 
 #include <sbi_elf.c>
 
-#define N_DBG
+// Neelu: Disable the following to skip loading and launching Tyche and directly launch Linux.  
+#define LAUNCH_TYCHE 
+#define TYCHE_LOAD_ADDRESS 0x80250000    
 
 extern int tyche_sm_bin;
 
@@ -279,8 +281,6 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	if (rc)
 		sbi_hart_hang();
 
-    sbi_printf("\n ========= scratch->next_addr: %lx ========= \n", scratch->next_addr);
-
 	rc = sbi_pmu_init(scratch, TRUE);
 	if (rc)
 		sbi_hart_hang();
@@ -362,46 +362,22 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	sbi_hsm_prepare_next_jump(scratch, hartid);
 
-	sbi_printf("\n-----------------FW_JUMP_ADDR: %lx to mode %ld, TYCHE_SM_START_CONTENT %x, TYCHE_SM_START_ADDR %p -------------------\n", scratch->next_addr, scratch->next_mode, tyche_sm_bin, &tyche_sm_bin); 
-
-#ifdef N_DBG
-	uintptr_t tyche_entry = parse_and_load_elf(&tyche_sm_bin, (void*)0x80250000);
-
-	//TODO: Need to assign pointer to function 
-
-    //NEELU: Rewriting scratch->next_addr -> This needs to be done properly by propagating the correct next_addr from the beginning. Check in lib/utils/fdt/fdt_domain.c 
-    scratch->next_addr = 0x80400000; 
+#ifdef LAUNCH_TYCHE
+    sbi_printf("\n-----------------FW_JUMP_ADDR: %lx to mode %ld, TYCHE_SM_START_CONTENT %x, TYCHE_SM_START_ADDR %p -------------------\n", scratch->next_addr, scratch->next_mode, tyche_sm_bin, &tyche_sm_bin); 
+	
+    uintptr_t tyche_entry = parse_and_load_elf(&tyche_sm_bin, (void*)TYCHE_LOAD_ADDRESS);
 
 	sbi_printf("\nARGS for TYCHE_SM: hartid: %d , arg1: %lx, next_addr: %lx, next_mode: %ld \n", hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
 
 	void* tyche_start = (void*)tyche_entry;
 
-	((void (*) (unsigned long, unsigned long, unsigned long, unsigned long))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr,
-                             scratch->next_mode);
+	((void (*) (unsigned long, unsigned long, unsigned long, unsigned long))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
 
-	__builtin_unreachable();
+#else 
+	sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, FALSE);
+#endif 
 
-	//long r; TODO: Commented temporaririly to test the pointer to function cast.
-	
-	//sbi_printf("\n-----------------TYCHE_JUMP_ADDR: %lx to mode %ld-------------------\n", scratch->tyche_sm_addr, scratch->tyche_sm_mode);
-	//sbi_printf("\n------------------ %d ------------------- \n",tyche_init());
-	
-	// TODO: Commented temporaririly to test the pointer to function cast. If it works, this won't be needed. 
-	/* __asm__ __volatile__ (
-		//"la t1, %0\n\t" 
-		"jalr t0, %1, 0x0\n\t" 
-		: "=r"(r)
-		: "r"(tyche_entry)				      
-		: "t0");
-	*/
-	
-	//Neelu: scratch->tyche_sm_addr contains the addr where tyche elf is in the fw bin, need to provide the entry_point of tyche viz available in the header. 
-	//sbi_hart_switch_mode(hartid, scratch->next_arg1, tyche_entry,
-         //                    scratch->tyche_sm_mode, FALSE);
-#endif
-	//TODO: Commented temporaririly to test the pointer to function cast.
-	//sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr,
-	//			     scratch->next_mode, FALSE);
+    __builtin_unreachable();
 }
 
 static void init_warm_startup(struct sbi_scratch *scratch, u32 hartid)
