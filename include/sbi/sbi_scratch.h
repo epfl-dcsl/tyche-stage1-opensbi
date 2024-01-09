@@ -88,10 +88,13 @@ struct sbi_scratch {
 	unsigned long tmp0;
 	/** Options for OpenSBI library */
 	unsigned long options;
-	/** Address of tyche sm for this HART */
-        unsigned long tyche_sm_addr;
-        /** Privilege mode of tyche sm for this HART */
-        unsigned long tyche_sm_mode;
+	//Neelu 
+    /** Address of tyche sm for this HART */
+    unsigned long tyche_sm_addr;
+    /** Privilege mode of tyche sm for this HART */
+    unsigned long tyche_sm_mode;
+    /** Tyche stack addr holder */ 
+    unsigned long tyche_stack_ptr;
 };
 
 /**
