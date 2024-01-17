@@ -4,7 +4,7 @@
 #include <sbi/sbi_console.h>
 //#include <assert.h>
 
-#define N_DBG_PRINTS
+//#define N_DBG_PRINTS
 
 //Neelu: Make sure to update this if num_ph > 10. 
 #define MAX_ELF_SEGMENTS 10
@@ -203,9 +203,9 @@ _Static_assert(
 		}*/
 	}
 
-#ifdef N_DBG_PRINTS
+//#ifdef N_DBG_PRINTS
         sbi_printf("\n%s tyche_entry %lx \n", __func__, tyche_entry);
-#endif
+//#endif
 
 	//return 0x801013e2;
 

@@ -371,7 +371,60 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	void* tyche_start = (void*)tyche_entry;
 
-	((void (*) (unsigned long, unsigned long, unsigned long, unsigned long))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
+    //Neelu: Todo start: Send IPIs to the other cores. Basically mimic an SBI_HSM_HART_START call. 
+    
+    //To mimic that - it needs the following reg state: For instance,  
+    //a0: 3 a1: 80201066 a2: 17efae370 a3: 0 a4: 0 a5: 0 a6: 0 a7: 48534d 
+    //Here, hartid = 3, a1 contains the next_addr (should be in Tyche for us),
+    //a2 is arg1 for next stage - I think we can assume it to be 0 here because Tyche doesn't expect this and then Tyche can set it for Linux as expected when Linux makes the SBI call. 
+    //a7 is ext_id (HSM extension here) and a6 is func_id (0 for HART_START) 
+    //a3/a4/a5 are don't care - better to keep them 0 Ig. 
+   
+    for(int i = 0; i < 4; i++) {
+        sbi_printf("\nMaking an ecall for hartid: %d\n",i);
+        if(i != hartid) {
+            __asm__ __volatile__ (
+                "mv a0, %[sa0]\n\t" 
+                "mv a1, %[sa1]\n\t"
+                "mv a2, zero\n\t"
+                "mv a3, zero\n\t"
+                "mv a4, zero\n\t"
+                "mv a5, zero\n\t"
+                "mv a6, zero\n\t"
+                "li a7, 0x48534d\n\t"
+                //Todo - store mepc? I guess it shouldn't be needed? The same for MPP - it should automatically be m-mode I suppose 
+                "ecall\n\t" 
+
+                :
+                : [sa0]"r"(i), [sa1]"r"(tyche_entry) 
+                : "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"
+            );
+            
+            sbi_printf("\nReturned from ecall for hartid: %d\n",i);
+        }
+    }
+
+    //Make sure it returns here - so MEPC and MPP should be appropriate. 
+    //There's a check in sbi_hsm_hart_start which prevents starting the harts in M-mode! I will comment this check.
+    
+    //Then make sure that mswi doesn't get converted to sswi? 
+    //Yes because mswi wakes up the hart by putting START_PENDING in the state and sending an interrupt - the start pending then leads to the completion of the remaining hart_init process and it eventually jumps to the "next_addr" in the scratch memory. 
+
+    //Make sure to jump to Tyche for warmboot harts - to be changed in init_warmboot (replace sbi_hart_switch_mode). 
+
+    //Wait until all the harts reach STARTED state 
+    //STARTED is represented by 0x0 - so when all the harts are started, the sum will be 0.
+    int num_harts_started = 0; 
+    while(num_harts_started != 0) {
+        num_harts_started = 0;
+        for(int i = 0; i < 4; i++) {
+            num_harts_started += sbi_hsm_hart_get_state(sbi_domain_thishart_ptr(), i);
+        }
+    }
+
+    //Neelu: Todo end  
+
+	((void (*) (unsigned long, unsigned long, unsigned long, unsigned long, bool))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, TRUE);
 
 #else 
 	sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, FALSE);
@@ -382,6 +435,7 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 static void init_warm_startup(struct sbi_scratch *scratch, u32 hartid)
 {
+    sbi_printf("\n[%s] for hartid: %d\n",__func__,hartid);
 	int rc;
 	unsigned long *init_count;
 	const struct sbi_platform *plat = sbi_platform_ptr(scratch);
@@ -455,8 +509,12 @@ static void init_warm_resume(struct sbi_scratch *scratch)
 static void __noreturn init_warmboot(struct sbi_scratch *scratch, u32 hartid)
 {
 	int hstate;
+    
+    sbi_printf("\n[%s] for hartid: %d\n",__func__,hartid);
 
 	wait_for_coldboot(scratch, hartid);
+
+    sbi_printf("\n[%s] Done waiting for coldboot for hartid: %d\n",__func__,hartid);
 
 	hstate = sbi_hsm_hart_get_state(sbi_domain_thishart_ptr(), hartid);
 	if (hstate < 0)
@@ -467,9 +525,16 @@ static void __noreturn init_warmboot(struct sbi_scratch *scratch, u32 hartid)
 	else
 		init_warm_startup(scratch, hartid);
 
+#ifdef LAUNCH_TYCHE
+    void* tyche_start = (void*)scratch->next_addr;
+    //In the following - next_addr is not really needed - Tyche won't do anything with it - it's basically Tyche's addr
+    ((void (*) (unsigned long, unsigned long, unsigned long, unsigned long, bool))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, FALSE);
+#else
 	sbi_hart_switch_mode(hartid, scratch->next_arg1,
 			     scratch->next_addr,
 			     scratch->next_mode, FALSE);
+#endif
+    __builtin_unreachable();
 }
 
 static atomic_t coldboot_lottery = ATOMIC_INITIALIZER(0);

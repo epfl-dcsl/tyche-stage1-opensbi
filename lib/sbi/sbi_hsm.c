@@ -186,6 +186,7 @@ static void hsm_device_hart_resume(void)
 
 int sbi_hsm_init(struct sbi_scratch *scratch, u32 hartid, bool cold_boot)
 {
+    sbi_printf("\n[%s] hartid: %d, cold_boot: %d",__func__, hartid, cold_boot);
 	u32 i;
 	struct sbi_scratch *rscratch;
 	struct sbi_hsm_data *hdata;
@@ -250,28 +251,44 @@ int sbi_hsm_hart_start(struct sbi_scratch *scratch,
 		       const struct sbi_domain *dom,
 		       u32 hartid, ulong saddr, ulong smode, ulong priv)
 {
+    sbi_printf("\n[%s]",__func__);
 	unsigned long init_count;
 	unsigned int hstate;
 	struct sbi_scratch *rscratch;
 	struct sbi_hsm_data *hdata;
 
+    //Neelu: Commenting the following check for now since I am allowing openSBI to wake and start the harts.
+    //Ideally I should have an arg to specify that this is a special case of hart_start called by openSBI so skip the check, otherwise execute the check. 
 	/* For now, we only allow start mode to be S-mode or U-mode. */
-	if (smode != PRV_S && smode != PRV_U)
-		return SBI_EINVAL;
-	if (dom && !sbi_domain_is_assigned_hart(dom, hartid))
+	//if (smode != PRV_S && smode != PRV_U)
+	//	return SBI_EINVAL;
+	
+
+    if (dom && !sbi_domain_is_assigned_hart(dom, hartid))
 		return SBI_EINVAL;
 	if (dom && !sbi_domain_check_addr(dom, saddr, smode,
 					  SBI_DOMAIN_EXECUTE))
 		return SBI_EINVALID_ADDR;
 
+    sbi_printf("\n[%s] Checks done 1",__func__);
+
 	rscratch = sbi_hartid_to_scratch(hartid);
 	if (!rscratch)
 		return SBI_EINVAL;
-	hdata = sbi_scratch_offset_ptr(rscratch, hart_data_offset);
+
+    sbi_printf("\n[%s] Checks done 1a",__func__);
+
+    hdata = sbi_scratch_offset_ptr(rscratch, hart_data_offset);
 	hstate = atomic_cmpxchg(&hdata->state, SBI_HSM_STATE_STOPPED,
 				SBI_HSM_STATE_START_PENDING);
-	if (hstate == SBI_HSM_STATE_STARTED)
+	
+    sbi_printf("\n[%s] SBI_HSM_STATE: %d",__func__, hstate);
+
+    if (hstate == SBI_HSM_STATE_STARTED)
 		return SBI_EALREADY;
+
+    sbi_printf("\n[%s] Checks done 2",__func__);
+
 
 	/**
 	 * if a hart is already transition to start or stop, another start call
@@ -280,6 +297,8 @@ int sbi_hsm_hart_start(struct sbi_scratch *scratch,
 	if (hstate != SBI_HSM_STATE_STOPPED)
 		return SBI_EINVAL;
 
+    sbi_printf("\n[%s] Checks done",__func__);
+
 	init_count = sbi_init_count(hartid);
 	rscratch->next_arg1 = priv;
 	rscratch->next_addr = saddr;
@@ -287,8 +306,10 @@ int sbi_hsm_hart_start(struct sbi_scratch *scratch,
 
 	if (hsm_device_has_hart_hotplug() ||
 	   (hsm_device_has_hart_secondary_boot() && !init_count)) {
+        sbi_printf("\n[%s] hsm_device_hart_start for hartid: %d",__func__, hartid);
 		return hsm_device_hart_start(hartid, scratch->warmboot_addr);
 	} else {
+        sbi_printf("\n[%s] Sending IPI to hartid: %d",__func__, hartid);
 		int rc = sbi_ipi_raw_send(hartid);
 		if (rc)
 		    return rc;
