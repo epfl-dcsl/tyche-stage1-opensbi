@@ -312,6 +312,8 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 		sbi_hart_hang();
 	}
 
+    //sbi_timer_event_start(100000);
+
 	rc = sbi_ecall_init();
 	if (rc) {
 		sbi_printf("%s: ecall init failed (error %d)\n", __func__, rc);
@@ -402,7 +404,7 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
             
             sbi_printf("\nReturned from ecall for hartid: %d\n",i);
         }
-    }
+    } 
 
     //Make sure it returns here - so MEPC and MPP should be appropriate. 
     //There's a check in sbi_hsm_hart_start which prevents starting the harts in M-mode! I will comment this check.
@@ -420,9 +422,11 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
         for(int i = 0; i < 4; i++) {
             num_harts_started += sbi_hsm_hart_get_state(sbi_domain_thishart_ptr(), i);
         }
-    }
+    } 
 
     //Neelu: Todo end  
+
+    sbi_timer_event_start(100000);
 
 	((void (*) (unsigned long, unsigned long, unsigned long, unsigned long, bool))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, TRUE);
 
@@ -475,7 +479,9 @@ static void init_warm_startup(struct sbi_scratch *scratch, u32 hartid)
 	if (rc)
 		sbi_hart_hang();
 
-	rc = sbi_hart_pmp_configure(scratch);
+    //sbi_timer_event_start(100000);
+
+    rc = sbi_hart_pmp_configure(scratch);
 	if (rc)
 		sbi_hart_hang();
 
@@ -527,6 +533,8 @@ static void __noreturn init_warmboot(struct sbi_scratch *scratch, u32 hartid)
 
 #ifdef LAUNCH_TYCHE
     void* tyche_start = (void*)scratch->next_addr;
+    
+    sbi_timer_event_start(100000);
     //In the following - next_addr is not really needed - Tyche won't do anything with it - it's basically Tyche's addr
     ((void (*) (unsigned long, unsigned long, unsigned long, unsigned long, bool))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, FALSE);
 #else
