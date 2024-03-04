@@ -31,9 +31,22 @@
 
 // Neelu: Disable the following to skip loading and launching Tyche and directly launch Linux.  
 #define LAUNCH_TYCHE 
+
+#ifdef LAUNCH_TYCHE 
 #define TYCHE_LOAD_ADDRESS 0x80250000    
+#define TYCHE_MANIFEST_ADDRESS 0x80240000
 
 extern int tyche_sm_bin;
+
+struct tyche_manifest {
+    unsigned long next_arg1;
+    unsigned long next_addr;
+    unsigned long next_mode;
+    unsigned long coldboot_hartid;
+    unsigned long num_harts;
+};
+
+#endif 
 
 //typedef void tyche_start(unsigned long, unsigned long, unsigned long, unsigned long); 
 
@@ -373,6 +386,16 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	void* tyche_start = (void*)tyche_entry;
 
+    struct tyche_manifest* manifest = (struct tyche_manifest*) TYCHE_MANIFEST_ADDRESS; 
+
+    manifest->next_arg1 = scratch->next_arg1;
+    manifest->next_addr = scratch->next_addr;
+    manifest->next_mode = scratch->next_mode;
+    manifest->coldboot_hartid = hartid;
+    manifest->num_harts = sbi_platform_hart_count(plat);  
+
+    sbi_printf("\nTyche Manifest: num_harts: %ld", manifest->num_harts);
+
     //Neelu: Todo start: Send IPIs to the other cores. Basically mimic an SBI_HSM_HART_START call. 
     
     //To mimic that - it needs the following reg state: For instance,  
@@ -382,7 +405,7 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
     //a7 is ext_id (HSM extension here) and a6 is func_id (0 for HART_START) 
     //a3/a4/a5 are don't care - better to keep them 0 Ig. 
    
-    for(int i = 0; i < 4; i++) {
+    for(int i = 0; i < manifest->num_harts; i++) {
         sbi_printf("\nMaking an ecall for hartid: %d\n",i);
         if(i != hartid) {
             __asm__ __volatile__ (
@@ -419,16 +442,16 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
     int num_harts_started = 0; 
     while(num_harts_started != 0) {
         num_harts_started = 0;
-        for(int i = 0; i < 4; i++) {
+        for(int i = 0; i < manifest->num_harts; i++) {
             num_harts_started += sbi_hsm_hart_get_state(sbi_domain_thishart_ptr(), i);
         }
     } 
 
     //Neelu: Todo end  
 
-    sbi_timer_event_start(100000);
+    //sbi_timer_event_start(100000);
 
-	((void (*) (unsigned long, unsigned long, unsigned long, unsigned long, bool))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, TRUE);
+	((void (*) (unsigned long, struct tyche_manifest*))tyche_start)(hartid, manifest);
 
 #else 
 	sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, FALSE);
@@ -534,9 +557,9 @@ static void __noreturn init_warmboot(struct sbi_scratch *scratch, u32 hartid)
 #ifdef LAUNCH_TYCHE
     void* tyche_start = (void*)scratch->next_addr;
     
-    sbi_timer_event_start(100000);
-    //In the following - next_addr is not really needed - Tyche won't do anything with it - it's basically Tyche's addr
-    ((void (*) (unsigned long, unsigned long, unsigned long, unsigned long, bool))tyche_start)(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, FALSE);
+    //sbi_timer_event_start(100000);
+    //In the following - manifest_addr is not really needed - Tyche won't do anything with it 
+    ((void (*) (unsigned long, struct tyche_manifest*))tyche_start)(hartid,(struct tyche_manifest*)TYCHE_MANIFEST_ADDRESS);
 #else
 	sbi_hart_switch_mode(hartid, scratch->next_arg1,
 			     scratch->next_addr,
