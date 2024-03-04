@@ -58,7 +58,7 @@ endif
 
 # Check if verbosity is ON for build process
 CMD_PREFIX_DEFAULT := @
-V=1
+# V=1 -- Neelu: Enable this for verbose build logs
 ifeq ($(V), 1)
 	CMD_PREFIX :=
 else
