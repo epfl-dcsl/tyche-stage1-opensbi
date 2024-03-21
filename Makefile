@@ -12,8 +12,6 @@
 # o  Do not print "Entering directory ...";
 MAKEFLAGS += -r --no-print-directory
 
-CROSS_COMPILE = riscv64-linux-gnu-
-
 # Readlink -f requires GNU readlink
 ifeq ($(shell uname -s),Darwin)
 READLINK ?= greadlink
@@ -506,16 +504,10 @@ $(build_dir)/%.o: $(src_dir)/%.c
 $(build_dir)/%.o: $(build_dir)/%.c
 	$(call compile_cc,$@,$<)
 
-ifeq ($(DROT),y)
-$(build_dir)/lib/sbi/tpm_driver.o : $(libsbiutils_dir)/tpm/tpm_driver.c FORCE
-	$(call compile_cc,$@,$<)
-endif
-
 ifeq ($(BUILD_INFO),y)
 $(build_dir)/lib/sbi/sbi_init.o: $(libsbi_dir)/sbi_init.c FORCE
 	$(call compile_cc,$@,$<)
 endif
-
 
 $(build_dir)/%.dep: $(src_dir)/%.S $(KCONFIG_CONFIG)
 	$(call compile_as_dep,$@,$<)
