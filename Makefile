@@ -504,6 +504,9 @@ $(build_dir)/%.o: $(src_dir)/%.c
 $(build_dir)/%.o: $(build_dir)/%.c
 	$(call compile_cc,$@,$<)
 
+ifeq ($(ROT_FLAG), y)
+	$(call compile_cc,$@,$<)
+endif
 ifeq ($(BUILD_INFO),y)
 $(build_dir)/lib/sbi/sbi_init.o: $(libsbi_dir)/sbi_init.c FORCE
 	$(call compile_cc,$@,$<)

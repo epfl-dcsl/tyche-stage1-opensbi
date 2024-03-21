@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: BSD-2-Clause
+
+menu "TCG TPM Support"
+
+config TPM
+	bool "TPM Driver Support"
+	default n
+
+config TCG_TPM
+	bool "TCG TPM TIS Support"
+	depends on TPM
+	default n
+
+endmenu
