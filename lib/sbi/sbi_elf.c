@@ -9,10 +9,19 @@
 //Neelu: Make sure to update this if num_ph > 10. 
 #define MAX_ELF_SEGMENTS 10
 
+#define TYCHE_LOADER_RESPONSE_ADDRESS 0x80248000;
+
+typedef struct {
+    uintptr_t tyche_entry;
+    unsigned long tyche_size;
+} tyche_loader_resp;
+
 char zero[4096] = {0};
 
-uintptr_t parse_and_load_elf(void* elf_start_addr, void* load_addr)
+tyche_loader_resp* parse_and_load_elf(void* elf_start_addr, void* load_addr)
 {
+    tyche_loader_resp* resp = (tyche_loader_resp*) TYCHE_LOADER_RESPONSE_ADDRESS;
+    unsigned long final_tyche_size = 0; 
 
 	Elf64_Ehdr* elf_header = (Elf64_Ehdr*) elf_start_addr;
 
@@ -32,7 +41,7 @@ uintptr_t parse_and_load_elf(void* elf_start_addr, void* load_addr)
 	//Neelu: Expecting 5 to be the upper bound for now. Update if num_ph > 5. 
 	Elf64_Phdr program_headers[MAX_ELF_SEGMENTS];
 
-#ifdef N_DBG_PRINTS
+#ifdef N_DBG_PRINT
         sbi_printf("\n%s ELF HEADER FIELDS : ph_start: %p, num_ph: %d \n", __func__, ph_start, num_ph);
 #endif
 
@@ -137,6 +146,8 @@ _Static_assert(
 #endif
 		sbi_memcpy(curr_seg_start_addr, (program_headers[i].p_offset+elf_start_addr), program_headers[i].p_filesz);
 
+        final_tyche_size += program_headers[i].p_memsz;
+
 		/*
 		load_addr += program_headers[i].p_filesz; 
 
@@ -209,7 +220,10 @@ _Static_assert(
 
 	//return 0x801013e2;
 
-	return tyche_entry; 
+    resp->tyche_size = final_tyche_size;
+    resp->tyche_entry = tyche_entry;
+
+	return resp; 
 
 	//TODO: Allocate Stack! 
 

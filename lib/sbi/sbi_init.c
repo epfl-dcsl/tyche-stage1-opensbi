@@ -380,11 +380,11 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 #ifdef LAUNCH_TYCHE
     sbi_printf("\n-----------------FW_JUMP_ADDR: %lx to mode %ld, TYCHE_SM_START_CONTENT %x, TYCHE_SM_START_ADDR %p -------------------\n", scratch->next_addr, scratch->next_mode, tyche_sm_bin, &tyche_sm_bin); 
 	
-    uintptr_t tyche_entry = parse_and_load_elf(&tyche_sm_bin, (void*)TYCHE_LOAD_ADDRESS);
+   tyche_loader_resp* tlr = parse_and_load_elf(&tyche_sm_bin, (void*)TYCHE_LOAD_ADDRESS);
 
 	sbi_printf("\nARGS for TYCHE_SM: hartid: %d , arg1: %lx, next_addr: %lx, next_mode: %ld \n", hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
 
-	void* tyche_start = (void*)tyche_entry;
+	void* tyche_start = (void*)tlr->tyche_entry;
 
     struct tyche_manifest* manifest = (struct tyche_manifest*) TYCHE_MANIFEST_ADDRESS; 
 
@@ -421,7 +421,7 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
                 "ecall\n\t" 
 
                 :
-                : [sa0]"r"(i), [sa1]"r"(tyche_entry) 
+                : [sa0]"r"(i), [sa1]"r"(tlr->tyche_entry) 
                 : "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"
             );
             
