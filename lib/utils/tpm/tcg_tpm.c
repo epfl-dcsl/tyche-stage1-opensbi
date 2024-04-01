@@ -179,7 +179,7 @@ int tpm20_read_pcrs(u8* pcr_indices, u32 count, void* resp_buffer, u32 rsize){
 }
 
 
-int tpm20_createLoaded(u32 parentobject) {
+int tpm20_createLoaded(u32 parentobject, u8* modulus) {
 	struct {
 		struct tpm2_req_createLoaded inParams;
 	} __packed req = {
@@ -318,6 +318,7 @@ int tpm20_createLoaded(u32 parentobject) {
 
 
 	/*sbi_printf("hashCategory is : %x, TPM_ALG_RSA is : %x\n", rsp.outPublic.publicArea.hashCategory, TPM_ALG_RSA);*/
+	sbi_memcpy(modulus, (u8*) rsp.modulus, 384);
 
 	return rsp.handle;
 
@@ -409,13 +410,14 @@ int tpm20_createPrimary(u32 authority){
 	return rsp.handle;
 }
 
-int tpm20_quote(struct quote_response* rsp){
+int tpm20_quote(struct quote_verif_info* verif){
 	u32 SRK = tpm20_createPrimary(TPM2_RH_OWNER);
 	if (SRK == -1) {
 		sbi_printf("Error in creating key under endorsment authority\n");
 		return -1;
 	}
-	u32 aikHandle = tpm20_createLoaded(SRK);
+	u8 modulus[384];
+	u32 aikHandle = tpm20_createLoaded(SRK, (u8*) modulus);
 	if (aikHandle == -1) {
 		sbi_printf("Error in creating key under SRK \n");
 		return -1;
@@ -463,22 +465,28 @@ int tpm20_quote(struct quote_response* rsp){
 	//	struct tpmt_signature_rsa signature;
 	//	u8 buffer[5]; //2 bytes for nonce size (0), 1 for session attributes echo, 2 for ack size
 	//}__packed rsp;
+	struct quote_response rsp;
 
-	uint32_t obuffer_len = sizeof(*rsp);
+	uint32_t obuffer_len = sizeof(rsp);
 
-	tpmhw_transmit(0, &req.quotePart.hdr, rsp, &obuffer_len, TPM_DURATION_TYPE_LONG);
+	tpmhw_transmit(0, &req.quotePart.hdr, &rsp, &obuffer_len, TPM_DURATION_TYPE_LONG);
 
-	rsp->rspHead.hdr.tag = be16_to_cpu(rsp->rspHead.hdr.tag);
-	rsp->rspHead.hdr.totlen = be32_to_cpu(rsp->rspHead.hdr.totlen);
-	rsp->rspHead.hdr.errcode = be32_to_cpu(rsp->rspHead.hdr.errcode);
-	if (rsp->rspHead.hdr.errcode) {
-	sbi_printf("For Quote: Response tag is : %02x\nResponse error code is %02x\n", rsp->rspHead.hdr.tag, rsp->rspHead.hdr.errcode);
+	rsp.rspHead.hdr.tag = be16_to_cpu(rsp.rspHead.hdr.tag);
+	rsp.rspHead.hdr.totlen = be32_to_cpu(rsp.rspHead.hdr.totlen);
+	rsp.rspHead.hdr.errcode = be32_to_cpu(rsp.rspHead.hdr.errcode);
+	if (rsp.rspHead.hdr.errcode) {
+	sbi_printf("For Quote: Response tag is : %02x\nResponse error code is %02x\n", rsp.rspHead.hdr.tag, rsp.rspHead.hdr.errcode);
 		return -1;
 	}
-	rsp->rspHead.parameterSize = be32_to_cpu(rsp->rspHead.parameterSize);
-	rsp->rspHead.quoted.attestSize= be16_to_cpu(rsp->rspHead.quoted.attestSize);
-	rsp->signature.signatureAlgorithm = be16_to_cpu(rsp->signature.signatureAlgorithm);
-	rsp->signature.sig.hashAlg = be16_to_cpu(rsp->signature.sig.hashAlg);
+	rsp.rspHead.parameterSize = be32_to_cpu(rsp.rspHead.parameterSize);
+	rsp.rspHead.quoted.attestSize= be16_to_cpu(rsp.rspHead.quoted.attestSize);
+	rsp.signature.signatureAlgorithm = be16_to_cpu(rsp.signature.signatureAlgorithm);
+	rsp.signature.sig.hashAlg = be16_to_cpu(rsp.signature.sig.hashAlg);
+
+	sbi_memcpy(verif->modulus, modulus, 384);
+	sbi_memcpy(verif->signature, rsp.signature.sig.signature, 384);
+	sbi_memcpy(verif->attestation, (u8*) &(rsp.rspHead.quoted.attestationData), 129);
+
 
 	return 0;
 	}

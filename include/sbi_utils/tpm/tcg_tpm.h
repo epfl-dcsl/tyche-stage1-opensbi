@@ -18,6 +18,12 @@ struct quote_response{
 
 } __packed;
 
+struct quote_verif_info{
+	u8 modulus[384];
+	u8 signature[384];
+	u8 attestation[384];
+} __packed;
+
 void tpm_setup(void);
 void tpm_prepboot(void);
 void tpm_s3_resume(void);
@@ -30,6 +36,6 @@ void tpm_menu(void);
 int tpm20_startup(void);
 int tpm20_drtm_operations(u8* data, u32 len);
 int tpm20_read_pcrs(u8* pcr_indices, u32 count, void* resp_buffer, u32 rsize);
-int tpm20_quote(struct quote_response* rsp);
+int tpm20_quote(struct quote_verif_info* rsp);
 
 #endif /* TCGBIOS_H */
