@@ -379,9 +379,10 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	init_count = sbi_scratch_offset_ptr(scratch, init_count_offset);
 	(*init_count)++;
+#ifdef TYCHE_DRTM
 	tpm20_startup();
 	sbi_printf("TPM init has finished.");
-
+#endif
 	sbi_hsm_prepare_next_jump(scratch, hartid);
 
 #ifdef LAUNCH_TYCHE
