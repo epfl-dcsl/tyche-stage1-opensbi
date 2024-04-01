@@ -409,7 +409,7 @@ int tpm20_createPrimary(u32 authority){
 	return rsp.handle;
 }
 
-int tpm20_quote(){
+int tpm20_quote(struct quote_response* rsp){
 	u32 SRK = tpm20_createPrimary(TPM2_RH_OWNER);
 	if (SRK == -1) {
 		sbi_printf("Error in creating key under endorsment authority\n");
@@ -455,90 +455,30 @@ int tpm20_quote(){
 		.bitmap = {0, 0, 2}
 	};
 
-	struct {
-		struct tpm2_quote_rsp rspHead;
-		u8 bitmap[3];
-		u16 digestSize;
-		u8 digest[SHA384_BUFSIZE]; //PCR rehash
-		struct tpmt_signature_rsa signature;
-		u8 buffer[5]; //2 bytes for nonce size (0), 1 for session attributes echo, 2 for ack size
-	}__packed rsp;
+	//struct {
+	//	struct tpm2_quote_rsp rspHead;
+	//	u8 bitmap[3];
+	//	u16 digestSize;
+	//	u8 digest[SHA384_BUFSIZE]; //PCR rehash
+	//	struct tpmt_signature_rsa signature;
+	//	u8 buffer[5]; //2 bytes for nonce size (0), 1 for session attributes echo, 2 for ack size
+	//}__packed rsp;
 
+	uint32_t obuffer_len = sizeof(*rsp);
 
-	uint32_t obuffer_len = sizeof(rsp);
+	tpmhw_transmit(0, &req.quotePart.hdr, rsp, &obuffer_len, TPM_DURATION_TYPE_LONG);
 
-	tpmhw_transmit(0, &req.quotePart.hdr, &rsp, &obuffer_len, TPM_DURATION_TYPE_LONG);
-
-	rsp.rspHead.hdr.tag = be16_to_cpu(rsp.rspHead.hdr.tag);
-	rsp.rspHead.hdr.totlen = be32_to_cpu(rsp.rspHead.hdr.totlen);
-	rsp.rspHead.hdr.errcode = be32_to_cpu(rsp.rspHead.hdr.errcode);
-	if (rsp.rspHead.hdr.errcode) {
-	sbi_printf("For Quote: Response tag is : %02x\nResponse error code is %02x\n", rsp.rspHead.hdr.tag, rsp.rspHead.hdr.errcode);
+	rsp->rspHead.hdr.tag = be16_to_cpu(rsp->rspHead.hdr.tag);
+	rsp->rspHead.hdr.totlen = be32_to_cpu(rsp->rspHead.hdr.totlen);
+	rsp->rspHead.hdr.errcode = be32_to_cpu(rsp->rspHead.hdr.errcode);
+	if (rsp->rspHead.hdr.errcode) {
+	sbi_printf("For Quote: Response tag is : %02x\nResponse error code is %02x\n", rsp->rspHead.hdr.tag, rsp->rspHead.hdr.errcode);
 		return -1;
 	}
-	rsp.rspHead.parameterSize = be32_to_cpu(rsp.rspHead.parameterSize);
-	rsp.rspHead.quoted.attestSize= be16_to_cpu(rsp.rspHead.quoted.attestSize);
-	/*rsp.rspHead.quoted.attestationData.magic = be32_to_cpu(rsp.rspHead.quoted.attestationData.magic);*/
-	/*rsp.rspHead.quoted.attestationData.type = be16_to_cpu(rsp.rspHead.quoted.attestationData.type);*/
-	/*rsp.rspHead.quoted.attestationData.nameSize = be16_to_cpu(rsp.rspHead.quoted.attestationData.nameSize);*/
-	/*rsp.rspHead.quoted.attestationData.extraDataSize = be16_to_cpu(rsp.rspHead.quoted.attestationData.extraDataSize);*/
-	/*rsp.rspHead.quoted.attestationData.clockInfo.clock = be64_to_cpu(rsp.rspHead.quoted.attestationData.clockInfo.clock);*/
-	/*rsp.rspHead.quoted.attestationData.clockInfo.resetCount= be32_to_cpu(rsp.rspHead.quoted.attestationData.clockInfo.resetCount);*/
-	/*rsp.rspHead.quoted.attestationData.clockInfo.restartCount= be32_to_cpu(rsp.rspHead.quoted.attestationData.clockInfo.restartCount);*/
-	/*rsp.rspHead.quoted.attestationData.firmwareVersion = be64_to_cpu(rsp.rspHead.quoted.attestationData.firmwareVersion);*/
-	/*rsp.rspHead.quoted.attestationData.pcrSelect.count = be32_to_cpu(rsp.rspHead.quoted.attestationData.pcrSelect.count);*/
-	/*rsp.digestSize = be16_to_cpu(rsp.digestSize);*/
-	/*rsp.rspHead.quoted.attestationData.pcrSel.hashAlg = be16_to_cpu(rsp.rspHead.quoted.attestationData.pcrSel.hashAlg);*/
-	rsp.signature.signatureAlgorithm = be16_to_cpu(rsp.signature.signatureAlgorithm);
-	rsp.signature.sig.hashAlg = be16_to_cpu(rsp.signature.sig.hashAlg);
-	sbi_printf("\nTag is %02x\n", rsp.rspHead.hdr.tag);
-	sbi_printf("Totlen is %08x\n", rsp.rspHead.hdr.totlen);
-	sbi_printf("Error code is %08x\n", rsp.rspHead.hdr.errcode);
-	sbi_printf("Parametersize is: %08x\n", rsp.rspHead.parameterSize);
-	sbi_printf("Attestation size is %04x\n", rsp.rspHead.quoted.attestSize);
-	u8* attestByteArray = (u8 *) &(rsp.rspHead.quoted.attestationData);
-	sbi_printf("Attestation bytes is:\n0x");
-	for(u32 i=0; i<rsp.rspHead.quoted.attestSize; i++) {
-		sbi_printf("%02x", attestByteArray[i]);
-	}
-	sbi_printf("\n");
-	/*sbi_printf("magicNumber is: %08x\n", rsp.rspHead.quoted.attestationData.magic);*/
-	/*sbi_printf("type is : %04x\n", rsp.rspHead.quoted.attestationData.type);*/
-	/*sbi_printf("nameSize is : %04x\n", rsp.rspHead.quoted.attestationData.nameSize);*/
-	/*sbi_printf("signName is ");*/
-	/*for(int i=0; i<rsp.rspHead.quoted.attestationData.nameSize; i++){*/
-		/*sbi_printf("%02x", rsp.rspHead.quoted.attestationData.qualifiedSignerName[i]);*/
-	/*}*/
-	/*sbi_printf("\n");*/
-	/*sbi_printf("extraDataSize is : %04x\n", rsp.rspHead.quoted.attestationData.extraDataSize);*/
-	/*sbi_printf("clockInfo.clock is %0lx\n", rsp.rspHead.quoted.attestationData.clockInfo.clock);*/
-	/*sbi_printf("clockInfo.resetCount is %08x\n", rsp.rspHead.quoted.attestationData.clockInfo.resetCount);*/
-	/*sbi_printf("clockInfo.restartCount is %08x\n", rsp.rspHead.quoted.attestationData.clockInfo.restartCount);*/
-	/*sbi_printf("clockInfo.safe is %02x\n", rsp.rspHead.quoted.attestationData.clockInfo.safe);*/
-	/*sbi_printf("firmwareVersion is %16lx\n", rsp.rspHead.quoted.attestationData.firmwareVersion);*/
-	/*sbi_printf("pcrSelectionCount is %08x\n", rsp.rspHead.quoted.attestationData.pcrSelect.count);*/
-	/*sbi_printf("hashAlg is: %04x\n", rsp.rspHead.quoted.attestationData.pcrSel.hashAlg);*/
-
-	/*sbi_printf("sizeofSelect is: %02x\n", rsp.rspHead.quoted.attestationData.pcrSel.sizeOfSelect);*/
-	/*sbi_printf("pcrSelection bitmap is:");*/
-	/*for (int i=0; i<rsp.rspHead.quoted.attestationData.pcrSel.sizeOfSelect; i++){*/
-		/*sbi_printf("%02x", rsp.bitmap[i]);*/
-	/*}*/
-	/*sbi_printf("\n");*/
-	/*sbi_printf("PCR digest size is :%04x\n", rsp.digestSize);*/
-	/*sbi_printf("PCR digest is: ");*/
-	/*for (int i=0; i<SHA256_BUFSIZE; i++){*/
-		/*sbi_printf("%02x", rsp.digest[i]);*/
-	/*}*/
-	/*sbi_printf("\n");*/
-	sbi_printf("Signature algorithm is: %04x\n", rsp.signature.signatureAlgorithm);
-	sbi_printf("Signature HASH algorithm is: %04x\n", rsp.signature.sig.hashAlg);
-	sbi_printf("Signature is:");
-	for (int i=0; i<384; i++){
-		sbi_printf("%02x", rsp.signature.sig.signature[i]);
-	}
-	sbi_printf("\n");
-	sbi_printf("For sanity, here are the two sizes: Local size (%d) vs announced size (%d)\n", obuffer_len, rsp.rspHead.hdr.totlen);
+	rsp->rspHead.parameterSize = be32_to_cpu(rsp->rspHead.parameterSize);
+	rsp->rspHead.quoted.attestSize= be16_to_cpu(rsp->rspHead.quoted.attestSize);
+	rsp->signature.signatureAlgorithm = be16_to_cpu(rsp->signature.signatureAlgorithm);
+	rsp->signature.sig.hashAlg = be16_to_cpu(rsp->signature.sig.hashAlg);
 
 	return 0;
 	}
@@ -547,6 +487,7 @@ int tpm20_quote(){
 /* In SeaBIOS, this method is wrapped into a tpm_setup method that handles linkage to the rest of the interface for the BIOS */
 int tpm20_startup(void){
 
+	sbi_printf("We are starting the TPM");
 	//Determine which interface we're using. TIS is prefered.
 	TPM_version = tpmhw_probe();
 	if(tpmhw_is_present()){

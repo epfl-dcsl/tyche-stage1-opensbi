@@ -124,6 +124,7 @@ static u32 crb_wait_reg(u8 locty, u16 reg, u32 time, u8 mask, u8 expect)
 static u32 tis_probe(void)
 {
     /* Wait for the interface to report it's ready */
+    sbi_printf("We are probing for TIS\n");
     u32 rc = tis_wait_access(0, TIS_DEFAULT_TIMEOUT_A,
                              TIS_ACCESS_TPM_REG_VALID_STS,
                              TIS_ACCESS_TPM_REG_VALID_STS);
@@ -198,6 +199,7 @@ static void init_timeout(int driver)
 static u32 tis_init(void)
 {
 
+    sbi_printf("We are enable TIS register!\n");
     write_b(TIS_REG(0, TIS_REG_INT_ENABLE), 0);
 
     init_timeout(TIS_DRIVER_IDX);
@@ -573,6 +575,7 @@ tpmhw_probe(void)
     unsigned int i;
     for (i = 0; i < TPM_NUM_DRIVERS; i++) {
         struct tpm_driver td = tpm_drivers[i];
+
         if (td.probe() != 0) {
             td.init();
             TPMHW_driver_to_use = i;

@@ -26,13 +26,15 @@
 #include <sbi/sbi_timer.h>
 #include <sbi/sbi_tlb.h>
 #include <sbi/sbi_version.h>
-
 #include <sbi_elf.c>
+#include <sbi_utils/tpm/tpm_driver.h>
+#include <sbi_utils/tpm/tcg_tpm.h>
 
 // Neelu: Disable the following to skip loading and launching Tyche and directly launch Linux.  
 #define LAUNCH_TYCHE 
 
 #ifdef LAUNCH_TYCHE 
+//#define TYCHE_DRTM
 #define TYCHE_LOAD_ADDRESS 0x80250000    
 #define TYCHE_MANIFEST_ADDRESS 0x80240000
 
@@ -44,6 +46,9 @@ struct tyche_manifest {
     unsigned long next_mode;
     unsigned long coldboot_hartid;
     unsigned long num_harts;
+    u8            modulus[384];
+    u8            signature[384];
+    u8            attestation[129];
 };
 
 #endif 
@@ -374,6 +379,8 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	init_count = sbi_scratch_offset_ptr(scratch, init_count_offset);
 	(*init_count)++;
+	tpm20_startup();
+	sbi_printf("TPM init has finished.");
 
 	sbi_hsm_prepare_next_jump(scratch, hartid);
 
@@ -382,10 +389,33 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	
    tyche_loader_resp* tlr = parse_and_load_elf(&tyche_sm_bin, (void*)TYCHE_LOAD_ADDRESS);
 
-	sbi_printf("\nARGS for TYCHE_SM: hartid: %d , arg1: %lx, next_addr: %lx, next_mode: %ld \n", hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
+	sbi_printf("\nPrinting ARGS for TYCHE_SM: hartid: %d , arg1: %lx, next_addr: %lx, next_mode: %ld \n", hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
 
 	void* tyche_start = (void*)tlr->tyche_entry;
+	struct quote_verif_info rsp = {0};
 
+#ifdef TYCHE_DRTM
+	uint32_t tyche_size = (uint32_t) tlr->tyche_size;
+        u8 pcrs[1] = {17};
+	sbi_printf("\nAbout to perform DRTM operations");
+	
+	tpm20_drtm_operations((u8*) TYCHE_LOAD_ADDRESS, tyche_size);
+	
+	sbi_printf("\nDone performing DRTM operations");
+	if (tpm20_read_pcrs(pcrs, 1, (void *) pcrs, 2)){
+		sbi_printf("Error trying to read PCRs\n");
+	}
+	sbi_printf("\nSuccessfully read PCRs");
+	
+	if(tpm20_quote(&rsp)){
+		sbi_printf("Failure to create the keys or get an attestation");
+	}
+	sbi_printf("\nSuccessfully done with Quote");
+	if (tpm20_read_pcrs(pcrs, 1, (void *) pcrs, 2)){
+		sbi_printf("Error trying to read PCRs\n");
+	}
+	sbi_printf("\nDone with DRTM!");
+#endif
     struct tyche_manifest* manifest = (struct tyche_manifest*) TYCHE_MANIFEST_ADDRESS; 
 
     manifest->next_arg1 = scratch->next_arg1;
@@ -393,8 +423,13 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
     manifest->next_mode = scratch->next_mode;
     manifest->coldboot_hartid = hartid;
     manifest->num_harts = sbi_platform_hart_count(plat);  
+    sbi_memcpy(manifest->modulus, rsp.modulus, 384);
+    sbi_memcpy(manifest->signature, rsp.signature, 384);
+    sbi_memcpy(manifest->attestation, rsp.attestation, 129);
 
-    sbi_printf("\nTyche Manifest: num_harts: %ld", manifest->num_harts);
+    sbi_printf("\nDone Creating Tyche Manifest: num_harts: %ld", manifest->num_harts);
+
+     
 
     //Neelu: Todo start: Send IPIs to the other cores. Basically mimic an SBI_HSM_HART_START call. 
     
@@ -439,7 +474,7 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
     //Wait until all the harts reach STARTED state 
     //STARTED is represented by 0x0 - so when all the harts are started, the sum will be 0.
-    int num_harts_started = 0; 
+    int num_harts_started = 1;	//just for it to enter the loop... I'm not sure if it was ever entering.  
     while(num_harts_started != 0) {
         num_harts_started = 0;
         for(int i = 0; i < manifest->num_harts; i++) {
@@ -450,6 +485,8 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
     //Neelu: Todo end  
 
     //sbi_timer_event_start(100000);
+
+    sbi_printf("\nEntering Tyche");
 
 	((void (*) (unsigned long, struct tyche_manifest*))tyche_start)(hartid, manifest);
 
