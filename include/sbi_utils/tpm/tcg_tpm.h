@@ -35,7 +35,7 @@ int tpm_can_show_menu(void);
 void tpm_menu(void);
 int tpm20_startup(void);
 int tpm20_drtm_operations(u8* data, u32 len);
-int tpm20_read_pcrs(u8* pcr_indices, u32 count, void* resp_buffer, u32 rsize);
+int tpm20_read_pcrs(u8* pcr_indices, u32 count);
 int tpm20_quote(struct quote_verif_info* rsp);
 
 #endif /* TCGBIOS_H */

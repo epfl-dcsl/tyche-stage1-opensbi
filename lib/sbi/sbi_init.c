@@ -34,7 +34,7 @@
 #define LAUNCH_TYCHE 
 
 #ifdef LAUNCH_TYCHE 
-//#define TYCHE_DRTM
+#define TYCHE_DRTM
 #define TYCHE_LOAD_ADDRESS 0x80250000    
 #define TYCHE_MANIFEST_ADDRESS 0x80240000
 
@@ -379,10 +379,6 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	init_count = sbi_scratch_offset_ptr(scratch, init_count_offset);
 	(*init_count)++;
-#ifdef TYCHE_DRTM
-	tpm20_startup();
-	sbi_printf("TPM init has finished.");
-#endif
 	sbi_hsm_prepare_next_jump(scratch, hartid);
 
 #ifdef LAUNCH_TYCHE
@@ -396,26 +392,26 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	struct quote_verif_info rsp = {0};
 
 #ifdef TYCHE_DRTM
-	uint32_t tyche_size = (uint32_t) tlr->tyche_size;
-        u8 pcrs[1] = {17};
-	sbi_printf("\nAbout to perform DRTM operations");
-	
-	tpm20_drtm_operations((u8*) TYCHE_LOAD_ADDRESS, tyche_size);
-	
-	sbi_printf("\nDone performing DRTM operations");
-	if (tpm20_read_pcrs(pcrs, 1, (void *) pcrs, 2)){
-		sbi_printf("Error trying to read PCRs\n");
+	sbi_printf("We are enabling DRTM");
+	if (!tpm20_startup()){
+		sbi_printf("TPM init has finished.\n");
+		uint32_t tyche_size = (uint32_t) tlr->tyche_size;
+		sbi_printf("About to perform DRTM operations\n");
+		tpm20_drtm_operations((u8*) TYCHE_LOAD_ADDRESS, tyche_size);
+		
+		sbi_printf("Done performing DRTM operations\n");
+		u8 pcrs[] = {17};
+		if (tpm20_read_pcrs(pcrs, 1)){
+			sbi_printf("Error trying to read PCRs\n");
+		}
+		if(tpm20_quote(&rsp)){
+			sbi_printf("Failure to create the keys or get an attestation\n");
+		}
+		if (tpm20_read_pcrs(pcrs, 1)){
+			sbi_printf("Error trying to read PCRs after quotation\n");
+		}
 	}
-	sbi_printf("\nSuccessfully read PCRs");
-	
-	if(tpm20_quote(&rsp)){
-		sbi_printf("Failure to create the keys or get an attestation");
-	}
-	sbi_printf("\nSuccessfully done with Quote");
-	if (tpm20_read_pcrs(pcrs, 1, (void *) pcrs, 2)){
-		sbi_printf("Error trying to read PCRs\n");
-	}
-	sbi_printf("\nDone with DRTM!");
+		sbi_printf("Done with DRTM!\n");
 #endif
     struct tyche_manifest* manifest = (struct tyche_manifest*) TYCHE_MANIFEST_ADDRESS; 
 

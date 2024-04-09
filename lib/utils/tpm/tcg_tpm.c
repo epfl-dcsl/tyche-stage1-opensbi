@@ -63,8 +63,6 @@ tpm_simple_cmd(u8 locty, u32 ordinal
 
     int ret = tpmhw_transmit(locty, &req.trqh, obuffer, &obuffer_len, to_t);
     ret = ret ? -1 : be32_to_cpu(trsh->errcode);
-    sbi_printf( "Return from tpm_simple_cmd(%x, %x, %x) = %x\n",
-            locty, ordinal, param, ret);
     return ret;
 }
 
@@ -89,8 +87,6 @@ tpm20_getcapability(u32 capability, u32 property, u32 count,
 	ret = (ret ||
 		   rsize < be32_to_cpu(rsp->totlen)) ? -1 : be32_to_cpu(rsp->errcode);
 
-    sbi_printf("TCG TPM : Return value from sending TPM2_CC_GetCapability = 0x%08x\n",
-            ret);
 
     return ret;
 }
@@ -101,7 +97,7 @@ int tpm20_drtm_operations(u8* data, u32 len){
 	if(rc != 0){
 		return -1;
 	}
-	sbi_timer_delay_loop(1, 1000, NULL, NULL);
+	sbi_timer_delay_loop(1, 10000, NULL, NULL);
 	tpm_senddata_loc4(data, len);
 	if(rc != 0){
 		return -1;
@@ -114,27 +110,49 @@ int tpm20_drtm_operations(u8* data, u32 len){
 	return rc;
 }
 
-int tpm20_read_pcrs(u8* pcr_indices, u32 count, void* resp_buffer, u32 rsize){
+int tpm20_read_pcrs(u8* pcr_indices, u32 count){
 
 	int rc = 0;
 
 	//Ad-hoc structure that contains the necessary informations.
 	//Equivalent to a TPML_PCR_SELECTION filled.
-	//Everything has to be made big-endian because this informations is passthrough to libtpms and is reverted by libtpms. Go figure.
+	//Everything has to be made big-endian because this informations is passthrough to libtpms and is reverted by libtpms.
+	uint32_t bitmap_iterator = 0;
+	uint32_t bitmap_int = 0;
+	u8 max_index = 0;
+	for (int i = 0; i<count; i++){
+		bitmap_iterator = 1<<31;
+		bitmap_iterator = bitmap_iterator >> pcr_indices[i];
+		max_index = pcr_indices[i] > max_index ? pcr_indices[i] : max_index;
+	}
+	//Sanity check on the max index
+	if (max_index > 31) {
+		return -1;
+	}
 	struct {
 		struct tpm_req_header trqh;
 		uint32_t count;
 		struct tpms_pcr_selection param;
-		u8 bitmap[3];
+		u8 bitmap[4];
 	} __packed req = {
 		.trqh.tag = cpu_to_be16(TPM2_ST_NO_SESSIONS),
-		.trqh.totlen = cpu_to_be32(sizeof(struct tpm_req_header) + +sizeof(uint32_t) + sizeof(struct tpms_pcr_selection) + 3*sizeof(u8)),
+		.trqh.totlen = 0,
 		.trqh.ordinal = cpu_to_be32(TPM2_CC_PCRRead),
 		.count = cpu_to_be32(1),
 		.param.hashAlg = cpu_to_be16(TPM2_ALG_SHA256), 
-		.param.sizeOfSelect = 3,
-		.bitmap = {0, 0, 2}, //PCR 17
+		.param.sizeOfSelect = 0,
+		.bitmap = {0, 0, 0, 0}
 	};
+	uint32_t supp = (((max_index / 8) * 8) == max_index) ? 0 : 1;
+	uint32_t nb_byte = (max_index / 8) + supp;
+	req.trqh.totlen = cpu_to_be32(sizeof(struct tpm_req_header) + +sizeof(uint32_t) + sizeof(struct tpms_pcr_selection) + nb_byte*sizeof(u8));
+	req.param.sizeOfSelect = nb_byte;
+	uint32_t extracted = 0;
+	uint32_t bitmask = 0xff000000;
+	for (int i = 0; i<nb_byte-1; i++){
+		extracted = bitmap_int ^ (bitmask >> i*8);
+		req.bitmap[i] = (char)(extracted >> ((3-i) * 8));
+	}
 
 	
 	struct {
@@ -156,23 +174,11 @@ int tpm20_read_pcrs(u8* pcr_indices, u32 count, void* resp_buffer, u32 rsize){
 	tpmhw_transmit(4, &req.trqh, &resp, &obuffer_len, TPM_DURATION_TYPE_LONG);
 
 	resp.trsh.tag = be16_to_cpu(resp.trsh.tag);
-	/*sbi_printf("%02x", resp.trsh.tag);*/
 	resp.trsh.totlen = be32_to_cpu(resp.trsh.totlen);
-	/*sbi_printf("%0x", resp.trsh.errcode);*/
 	resp.pcrUpdateCounter = be32_to_cpu(resp.pcrUpdateCounter);
-	/*sbi_printf("%02x", resp.pcrUpdateCounter);*/
 	resp.pcrSelectionOut.count = be32_to_cpu(resp.pcrSelectionOut.count);
-	/*sbi_printf("%02x", resp.pcrSelectionOut.count);*/
 	resp.pcrSels.hashAlg = be16_to_cpu(resp.pcrSels.hashAlg);
 	resp.digestSize = be16_to_cpu(resp.digestSize);
-
-	sbi_printf("Printing PCR17 digest\n");
-	for(int i=0; i<SHA256_BUFSIZE; i++) {
-		sbi_printf("%02x", resp.digest[i]);
-	}
-	sbi_printf("\n");
-
-	
 
 	return rc;
 
@@ -223,7 +229,6 @@ int tpm20_createLoaded(u32 parentobject, u8* modulus) {
 					.hashCategory = cpu_to_be16(TPM_ALG_RSA),
 					.namingAlg = cpu_to_be16(TPM_ALG_SHA256),
 					//TPMA_OBJECT
-					//Sign/encrypt flag + userWithAuth + noDA protection
 					/*//https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part2_Structures_pub.pdf page 64*/
 					/*//TPMT_PUBLIC.authPolicy (TPM2B_DIGEST)*/
 					.objectAttributes.attributes = cpu_to_be32((1<<18) | (1<<16)| (1<<10)| (1<<5) | (1<<6) | (1<<1) | (1<<4)),
@@ -261,63 +266,12 @@ int tpm20_createLoaded(u32 parentobject, u8* modulus) {
 	tpmhw_transmit(0, &req.inParams.hdr, &rsp, &obuffer_len, TPM_DURATION_TYPE_LONG);
 
 	if (rsp.trsh.errcode) {
-	sbi_printf("Response tag is : %02x\nResponse error code is %02x\n", rsp.trsh.tag, rsp.trsh.errcode);
 		return -1;
 	}
 
 	rsp.trsh.tag = be16_to_cpu(rsp.trsh.tag);
 	rsp.trsh.totlen = be32_to_cpu(rsp.trsh.totlen);
 	rsp.handle = be32_to_cpu(rsp.handle);
-
-	rsp.parameterSize = be32_to_cpu(rsp.parameterSize);
-
-	rsp.privateSize = be16_to_cpu(rsp.privateSize);
-
-	rsp.outPublic.size = be16_to_cpu(rsp.outPublic.size);
-	rsp.outPublic.publicArea.hashCategory = cpu_to_be16(rsp.outPublic.publicArea.hashCategory); 
-	rsp.outPublic.publicArea.namingAlg = cpu_to_be16(rsp.outPublic.publicArea.namingAlg);
-	rsp.outPublic.publicArea.objectAttributes.attributes = cpu_to_be32(rsp.outPublic.publicArea.objectAttributes.attributes);
-	rsp.outPublic.publicArea.authPolicy.size = cpu_to_be32(rsp.outPublic.publicArea.authPolicy.size);
-	rsp.outPublic.publicArea.rsaParms.symmetricAlg = cpu_to_be16(rsp.outPublic.publicArea.rsaParms.symmetricAlg),
-
-	rsp.outPublic.publicArea.rsaParms.scheme.scheme = cpu_to_be16(rsp.outPublic.publicArea.rsaParms.scheme.scheme),
-	rsp.outPublic.publicArea.rsaParms.keyBits = cpu_to_be16(rsp.outPublic.publicArea.rsaParms.keyBits),
-	rsp.outPublic.publicArea.rsaParms.publicExponent = cpu_to_be32(rsp.outPublic.publicArea.rsaParms.publicExponent),
-	rsp.outPublic.publicArea.public_rsa_key_buffer = cpu_to_be16(rsp.outPublic.publicArea.public_rsa_key_buffer),
-
-
-	sbi_printf("\nTag is %02x\n", rsp.trsh.tag);
-	sbi_printf("Totlen is %08x\n", rsp.trsh.totlen);
-	sbi_printf("Error code is %08x\n", rsp.trsh.errcode);
-	sbi_printf("Handle is %08x\n", rsp.handle);
-	sbi_printf("Parametersize is: %08x\n", rsp.parameterSize);
-	sbi_printf("Private size is: %04x\n", rsp.privateSize);
-	sbi_printf("Private area is :\n");
-	for(u16 i=0; i<rsp.privateSize; i++){
-		sbi_printf("%02x ", rsp.encryptedPrivate[i]);
-	}
-	sbi_printf("\n");
-	sbi_printf("Public size is : %04x\n", rsp.outPublic.size);
-	sbi_printf("HashCategory is: %04x\n", rsp.outPublic.publicArea.hashCategory);
-	sbi_printf("namingAlg is: %04x\n", rsp.outPublic.publicArea.namingAlg);
-	sbi_printf("objectAttributes is: %08x\n", rsp.outPublic.publicArea.objectAttributes.attributes);
-	sbi_printf("authPolicy is: %04x\n", rsp.outPublic.publicArea.authPolicy.size);
-	sbi_printf("rsaParms.symmetricAlg is: %04x\n", rsp.outPublic.publicArea.rsaParms.symmetricAlg);
-	sbi_printf("rsaParms.scheme is: %04x    TPM_ALG_RSASSA is: %04x\n", rsp.outPublic.publicArea.rsaParms.scheme.scheme, TPM_ALG_RSASSA);
-	sbi_printf("rsaParms.keyBits is: %04x\n", rsp.outPublic.publicArea.rsaParms.keyBits);
-	sbi_printf("rsaParms.publicExponent is: %08x\n", rsp.outPublic.publicArea.rsaParms.publicExponent);
-	sbi_printf("keySize is: %04x\n", rsp.outPublic.publicArea.public_rsa_key_buffer);
-	sbi_printf("Modulus is:\n0x");
-	for(u16 i=0; i<rsp.outPublic.publicArea.public_rsa_key_buffer; i++){
-		sbi_printf("%02x", rsp.modulus[i]);
-	}
-	sbi_printf("\n");
-
-
-	/*sbi_printf("rsa_key_size is : %u\n", rsp.outPublic.publicArea.public_rsa_key_buffer);*/
-
-
-	/*sbi_printf("hashCategory is : %x, TPM_ALG_RSA is : %x\n", rsp.outPublic.publicArea.hashCategory, TPM_ALG_RSA);*/
 	sbi_memcpy(modulus, (u8*) rsp.modulus, 384);
 
 	return rsp.handle;
@@ -328,9 +282,6 @@ int tpm20_createPrimary(u32 authority){
 
 	struct {
 		struct tpm2_req_createPrimaryRSA inParams;
-
-		/*struct tpms_pcr_selection pcrSel;*/
-		/*u8 bitmap[3];*/
 	} __packed req = {
 		.inParams = {
 			.hdr = {
@@ -457,14 +408,6 @@ int tpm20_quote(struct quote_verif_info* verif){
 		.bitmap = {0, 0, 2}
 	};
 
-	//struct {
-	//	struct tpm2_quote_rsp rspHead;
-	//	u8 bitmap[3];
-	//	u16 digestSize;
-	//	u8 digest[SHA384_BUFSIZE]; //PCR rehash
-	//	struct tpmt_signature_rsa signature;
-	//	u8 buffer[5]; //2 bytes for nonce size (0), 1 for session attributes echo, 2 for ack size
-	//}__packed rsp;
 	struct quote_response rsp;
 
 	uint32_t obuffer_len = sizeof(rsp);
@@ -478,11 +421,6 @@ int tpm20_quote(struct quote_verif_info* verif){
 	sbi_printf("For Quote: Response tag is : %02x\nResponse error code is %02x\n", rsp.rspHead.hdr.tag, rsp.rspHead.hdr.errcode);
 		return -1;
 	}
-	rsp.rspHead.parameterSize = be32_to_cpu(rsp.rspHead.parameterSize);
-	rsp.rspHead.quoted.attestSize= be16_to_cpu(rsp.rspHead.quoted.attestSize);
-	rsp.signature.signatureAlgorithm = be16_to_cpu(rsp.signature.signatureAlgorithm);
-	rsp.signature.sig.hashAlg = be16_to_cpu(rsp.signature.sig.hashAlg);
-
 	sbi_memcpy(verif->modulus, modulus, 384);
 	sbi_memcpy(verif->signature, rsp.signature.sig.signature, 384);
 	sbi_memcpy(verif->attestation, (u8*) &(rsp.rspHead.quoted.attestationData), 129);
@@ -504,14 +442,12 @@ int tpm20_startup(void){
 	}
 	int ret = tpm_simple_cmd(0, TPM2_CC_Startup,
 							 2, TPM2_SU_CLEAR, TPM_DURATION_TYPE_SHORT);
-	sbi_printf("TCG TPM: Return value from sending TPM2_CC_Startup(SU_CLEAR) =0x%08x\n", ret);
 	if (ret)
 		sbi_printf("ERROR: TPM could not be initialized\n");
 
 
     ret = tpm_simple_cmd(0, TPM2_CC_SelfTest,
                          1, TPM2_YES, TPM_DURATION_TYPE_LONG);
-	sbi_printf("TCG TPM: Return value from sending TPM2_CC_SelfTest =0x%08x\n", ret);
 	if (ret) return -1;
 
 	u8 buffer[128];
@@ -521,10 +457,5 @@ int tpm20_startup(void){
 								  sizeof(buffer));
 	if (ret)
 		return ret;
-	/*ret = tpm20_get_pcrbanks();*/
-	
-	/*sbi_printf("%u", ((u8 *) tpm20_pcr_selection)[sizeof(struct tpml_pcr_selection  ) + sizeof(u16)]);*/
-
-	if (ret) return -1;
-    return 0;
+	return 0;
 }

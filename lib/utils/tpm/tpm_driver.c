@@ -124,7 +124,6 @@ static u32 crb_wait_reg(u8 locty, u16 reg, u32 time, u8 mask, u8 expect)
 static u32 tis_probe(void)
 {
     /* Wait for the interface to report it's ready */
-    sbi_printf("We are probing for TIS\n");
     u32 rc = tis_wait_access(0, TIS_DEFAULT_TIMEOUT_A,
                              TIS_ACCESS_TPM_REG_VALID_STS,
                              TIS_ACCESS_TPM_REG_VALID_STS);
@@ -199,7 +198,6 @@ static void init_timeout(int driver)
 static u32 tis_init(void)
 {
 
-    sbi_printf("We are enable TIS register!\n");
     write_b(TIS_REG(0, TIS_REG_INT_ENABLE), 0);
 
     init_timeout(TIS_DRIVER_IDX);
@@ -759,6 +757,7 @@ u32 tpm_hash_end_loc4(void){
 
 int tpm_senddata_loc4(u8* data, u32 len){
     if (TPMHW_driver_to_use == TPM_INVALID_DRIVER || TPMHW_driver_to_use == CRB_DRIVER_IDX){
+	//We are only working on TIS for DRTM.
         return -1;
 	}
 	return tis_senddata_loc4(data, len);
