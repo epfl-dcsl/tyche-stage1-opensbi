@@ -154,7 +154,6 @@ int tpm20_read_pcrs(u8* pcr_indices, u32 count){
 
 	resp.trsh.tag = be16_to_cpu(resp.trsh.tag);
 	resp.trsh.totlen = be32_to_cpu(resp.trsh.totlen);
-	sbi_printf("%0x", resp.trsh.errcode);
 	resp.pcrUpdateCounter = be32_to_cpu(resp.pcrUpdateCounter);
 	resp.pcrSelectionOut.count = be32_to_cpu(resp.pcrSelectionOut.count);
 	resp.pcrSels.hashAlg = be16_to_cpu(resp.pcrSels.hashAlg);
