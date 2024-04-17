@@ -392,15 +392,18 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 	struct quote_verif_info rsp = {0};
 
 #ifdef TYCHE_DRTM
-	sbi_printf("We are enabling DRTM");
+	sbi_printf("We are enabling DRTM\n");
 	if (!tpm20_startup()){
 		sbi_printf("TPM init has finished.\n");
 		uint32_t tyche_size = (uint32_t) tlr->tyche_size;
 		sbi_printf("About to perform DRTM operations\n");
+		u8 pcrs[] = {17};
+		if (tpm20_read_pcrs(pcrs, 1)){
+			sbi_printf("Error trying to read PCRs\n");
+		}
 		tpm20_drtm_operations((u8*) TYCHE_LOAD_ADDRESS, tyche_size);
 		
 		sbi_printf("Done performing DRTM operations\n");
-		u8 pcrs[] = {17};
 		if (tpm20_read_pcrs(pcrs, 1)){
 			sbi_printf("Error trying to read PCRs\n");
 		}

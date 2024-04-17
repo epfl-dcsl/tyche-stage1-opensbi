@@ -14,6 +14,7 @@
 static TPMVersion TPM_version;
 
 
+#define MAX_PCR_INDEX 32
 static void
 tpm20_set_timeouts(void)
 {
@@ -97,7 +98,7 @@ int tpm20_drtm_operations(u8* data, u32 len){
 	if(rc != 0){
 		return -1;
 	}
-	sbi_timer_delay_loop(1, 10000, NULL, NULL);
+	sbi_timer_delay_loop(1, 1000, NULL, NULL);
 	tpm_senddata_loc4(data, len);
 	if(rc != 0){
 		return -1;
@@ -117,44 +118,23 @@ int tpm20_read_pcrs(u8* pcr_indices, u32 count){
 	//Ad-hoc structure that contains the necessary informations.
 	//Equivalent to a TPML_PCR_SELECTION filled.
 	//Everything has to be made big-endian because this informations is passthrough to libtpms and is reverted by libtpms.
-	uint32_t bitmap_iterator = 0;
-	uint32_t bitmap_int = 0;
-	u8 max_index = 0;
-	for (int i = 0; i<count; i++){
-		bitmap_iterator = 1<<31;
-		bitmap_iterator = bitmap_iterator >> pcr_indices[i];
-		max_index = pcr_indices[i] > max_index ? pcr_indices[i] : max_index;
-	}
-	//Sanity check on the max index
-	if (max_index > 31) {
-		return -1;
-	}
+
 	struct {
 		struct tpm_req_header trqh;
 		uint32_t count;
 		struct tpms_pcr_selection param;
-		u8 bitmap[4];
+		u8 bitmap[3];
 	} __packed req = {
 		.trqh.tag = cpu_to_be16(TPM2_ST_NO_SESSIONS),
 		.trqh.totlen = 0,
 		.trqh.ordinal = cpu_to_be32(TPM2_CC_PCRRead),
 		.count = cpu_to_be32(1),
-		.param.hashAlg = cpu_to_be16(TPM2_ALG_SHA256), 
-		.param.sizeOfSelect = 0,
-		.bitmap = {0, 0, 0, 0}
+		.param.hashAlg = cpu_to_be16(TPM2_ALG_SHA384), 
+		.param.sizeOfSelect = 3,
+		.bitmap = {0, 0, 2}
 	};
-	uint32_t supp = (((max_index / 8) * 8) == max_index) ? 0 : 1;
-	uint32_t nb_byte = (max_index / 8) + supp;
-	req.trqh.totlen = cpu_to_be32(sizeof(struct tpm_req_header) + +sizeof(uint32_t) + sizeof(struct tpms_pcr_selection) + nb_byte*sizeof(u8));
-	req.param.sizeOfSelect = nb_byte;
-	uint32_t extracted = 0;
-	uint32_t bitmask = 0xff000000;
-	for (int i = 0; i<nb_byte-1; i++){
-		extracted = bitmap_int ^ (bitmask >> i*8);
-		req.bitmap[i] = (char)(extracted >> ((3-i) * 8));
-	}
-
-	
+	req.trqh.totlen = cpu_to_be32(sizeof(struct tpm_req_header) + +sizeof(uint32_t) + sizeof(struct tpms_pcr_selection) + 3*sizeof(u8));
+	//Adapt this struct to your use case.
 	struct {
 		struct tpm_rsp_header trsh;
 		uint32_t pcrUpdateCounter;
@@ -163,9 +143,8 @@ int tpm20_read_pcrs(u8* pcr_indices, u32 count){
 		u8 bitmap[3];
 		struct tpm2_digest_values pcrValues;
 		u16 digestSize;
-		u8 digest[SHA256_BUFSIZE];
+		u8 digest[SHA384_BUFSIZE];
 	} __packed resp;
-
 	
 
 	uint32_t obuffer_len = sizeof(resp);
@@ -175,10 +154,16 @@ int tpm20_read_pcrs(u8* pcr_indices, u32 count){
 
 	resp.trsh.tag = be16_to_cpu(resp.trsh.tag);
 	resp.trsh.totlen = be32_to_cpu(resp.trsh.totlen);
+	sbi_printf("%0x", resp.trsh.errcode);
 	resp.pcrUpdateCounter = be32_to_cpu(resp.pcrUpdateCounter);
 	resp.pcrSelectionOut.count = be32_to_cpu(resp.pcrSelectionOut.count);
 	resp.pcrSels.hashAlg = be16_to_cpu(resp.pcrSels.hashAlg);
 	resp.digestSize = be16_to_cpu(resp.digestSize);
+	sbi_printf("Printing PCR17 Digest\n");
+	for(int i = 0; i<SHA384_BUFSIZE; i++) {
+		sbi_printf("%02x", resp.digest[i]);
+	}
+	sbi_printf("\n");
 
 	return rc;
 
@@ -401,7 +386,7 @@ int tpm20_quote(struct quote_verif_info* verif){
 			},
 		},
 		.pcrSelectionIn = {
-			.hashAlg = cpu_to_be16(TPM2_ALG_SHA256),
+			.hashAlg = cpu_to_be16(TPM2_ALG_SHA384),
 			.sizeOfSelect = 3
 		},
 		//PCR 17
@@ -433,11 +418,10 @@ int tpm20_quote(struct quote_verif_info* verif){
 /* In SeaBIOS, this method is wrapped into a tpm_setup method that handles linkage to the rest of the interface for the BIOS */
 int tpm20_startup(void){
 
-	sbi_printf("We are starting the TPM");
+	sbi_printf("We are starting the TPM\n");
 	//Determine which interface we're using. TIS is prefered.
 	TPM_version = tpmhw_probe();
 	if(tpmhw_is_present()){
-		sbi_printf("TPM is present and we can set timeouts\n");
 		tpm20_set_timeouts();
 	}
 	int ret = tpm_simple_cmd(0, TPM2_CC_Startup,
