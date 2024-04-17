@@ -717,7 +717,7 @@ static u32 tis_senddata_loc4(const u8 * const data, u32 len){
 			write_b(TIS_REG(4, TIS_HASH_DATA_FIFO), data[offset++]);
 		}
 		/* Blocking wait */
-		sbi_timer_delay_loop(1, 1000, NULL, NULL);
+		sbi_timer_delay_loop(1, 10000, NULL, NULL);
 
 		if (offset==len)
 			end_loop = 1;
