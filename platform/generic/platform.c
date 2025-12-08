@@ -254,9 +254,9 @@ static uint64_t generic_pmu_xlate_to_mhpmevent(uint32_t event_idx,
 
 static int generic_console_init(void)
 {
-	if (semihosting_enabled())
-		return semihosting_init();
-	else
+	//if (semihosting_enabled())
+	//	return semihosting_init();
+	//else
 		return fdt_serial_init();
 }
 
