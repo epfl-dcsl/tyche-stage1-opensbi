@@ -22,23 +22,23 @@ platform-objs-y += platform.o
 platform-objs-y += platform_override_modules.o
 
 # Blobs to build
-FW_TEXT_START=0x80000000
+FW_TEXT_START=0x80200000
 FW_DYNAMIC=y
 FW_JUMP=y
 ifeq ($(PLATFORM_RISCV_XLEN), 32)
   # This needs to be 4MB aligned for 32-bit system
   FW_JUMP_ADDR=$(shell printf "0x%X" $$(($(FW_TEXT_START) + 0x400000)))
 else
-	# This needs to be 2MB aligned for 64-bit system	# Neelu: Moved it to 4 MB boundary for xlen 64 instead of 2 MB
-  FW_JUMP_ADDR=$(shell printf "0x%X" $$(($(FW_TEXT_START) + 0x400000)))
+	# This needs to be 2MB aligned for 64-bit system	# Neelu: Moved it to 6 MB boundary for xlen 64 instead of 2 MB
+  FW_JUMP_ADDR=$(shell printf "0x%X" $$(($(FW_TEXT_START) + 0x600000)))
 endif
-FW_JUMP_FDT_ADDR=$(shell printf "0x%X" $$(($(FW_TEXT_START) + 0x2400000)))	#Neelu" Moved this by 2 MBs just in case 
+FW_JUMP_FDT_ADDR=$(shell printf "0x%X" $$(($(FW_TEXT_START) + 0x2600000)))	#Neelu" Moved this by 4 MBs too, to keep the offsets at the same distance 
 FW_PAYLOAD=y
 ifeq ($(PLATFORM_RISCV_XLEN), 32)
   # This needs to be 4MB aligned for 32-bit system
   FW_PAYLOAD_OFFSET=0x400000
 else
   # This needs to be 2MB aligned for 64-bit system
-  FW_PAYLOAD_OFFSET=0x400000 	# Neelu: Moved it to 4 MB boundary for xlen 64 instead of 2 MB
+  FW_PAYLOAD_OFFSET=0x600000 	# Neelu: Moved it to 6 MB boundary for xlen 64 instead of 2 MB
 endif
 FW_PAYLOAD_FDT_ADDR=$(FW_JUMP_FDT_ADDR)

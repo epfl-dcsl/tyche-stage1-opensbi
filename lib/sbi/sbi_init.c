@@ -33,8 +33,9 @@
 #define LAUNCH_TYCHE 
 
 #ifdef LAUNCH_TYCHE 
-#define TYCHE_LOAD_ADDRESS 0x80250000    
-#define TYCHE_MANIFEST_ADDRESS 0x80240000
+#define TYCHE_LOAD_ADDRESS 0x0000000080450000    
+#define TYCHE_MANIFEST_ADDRESS 0x0000000080440000
+#define ADDRESS_MASK_BITS 32
 
 extern int tyche_sm_bin;
 
@@ -45,6 +46,46 @@ struct tyche_manifest {
     unsigned long coldboot_hartid;
     unsigned long num_harts;
 };
+
+// TYCHE_LOAD_ADDRESS, manifest->next_addr - TYCHE_LOAD_ADDRESS - 1, tyche_start, hartid, manifest
+void enter_anchor(unsigned long tyche_start_addr, unsigned long tyche_region_size, unsigned long tyche_entry_addr, unsigned long hartid, struct tyche_manifest* manifest) {
+
+	//sbi_printf("\nArgs to Anchor: tyche_start_addr: %lx, region_size: %lx, entry_addr: %lx, hartid: %lx, manifest_addr: %p", tyche_start_addr, tyche_region_size, tyche_entry_addr, hartid, manifest); 
+
+	// register unsigned long r_sa0 asm("a0") = TYCHE_LOAD_ADDRESS;
+	// register unsigned long r_sa1 asm("a1") = tyche_region_size;
+	// register unsigned long r_sa2 asm("a2") = tyche_entry_addr;
+	// register unsigned long r_sa3 asm("a3") = hartid;
+	// register struct tyche_manifest *r_sa4 asm("a4") = manifest;
+	// //register unsigned long r_sa0 asm("a5") = TYCHE_LOAD_ADDRESS;
+	// //register unsigned long r_sa2 asm("a6") = tyche_entry_addr;
+
+	// __asm__ __volatile__ (
+	// 	// directly use them, no mv needed
+	// 	".word 0x0002902b\n\t"
+	// 	:
+	// 	: "r"(r_sa0), "r"(r_sa1), "r"(r_sa2), "r"(r_sa3), "r"(r_sa4)
+	// 	//: "a0","a1","a2","a3","a4","a5","a6","a7"
+	// );
+
+	//tyche_start_addr = ((tyche_start_addr << ADDRESS_MASK_BITS) >> ADDRESS_MASK_BITS);
+
+	__asm__ __volatile__ (
+		"mv a0, %[sa0]\n\t" 
+		"mv a1, %[sa1]\n\t"
+		"mv a2, %[sa2]\n\t"
+		"mv a3, %[sa3]\n\t"
+		"mv a4, %[sa4]\n\t"
+		"mv a5, %[sa0]\n\t"
+		"mv a6, %[sa2]\n\t"
+		"addi a7, zero, 1\n\t"
+		".word 0x0002902b\n\t"
+		:
+		: [sa0]"r"(TYCHE_LOAD_ADDRESS), [sa1]"r"(tyche_region_size), [sa2]"r"(tyche_entry_addr), [sa3]"r"(hartid), [sa4]"r"(manifest)
+		: "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"
+	);
+
+}
 
 #endif 
 
@@ -384,7 +425,7 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	sbi_printf("\nARGS for TYCHE_SM: hartid: %d , arg1: %lx, next_addr: %lx, next_mode: %ld \n", hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode);
 
-	void* tyche_start = (void*)tlr->tyche_entry;
+	//void* tyche_start = (void*)tlr->tyche_entry;
 
     struct tyche_manifest* manifest = (struct tyche_manifest*) TYCHE_MANIFEST_ADDRESS; 
 
@@ -439,8 +480,9 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
     //Wait until all the harts reach STARTED state 
     //STARTED is represented by 0x0 - so when all the harts are started, the sum will be 0.
-    int num_harts_started = 0; 
+    int num_harts_started = 0; // WTF? 
     while(num_harts_started != 0) {
+		sbi_printf(" I SHOULD NEVER EXECUTE! ");
         num_harts_started = 0;
         for(int i = 0; i < manifest->num_harts; i++) {
             num_harts_started += sbi_hsm_hart_get_state(sbi_domain_thishart_ptr(), i);
@@ -451,7 +493,11 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
     //sbi_timer_event_start(100000);
 
-	((void (*) (unsigned long, struct tyche_manifest*))tyche_start)(hartid, manifest);
+	sbi_printf("\nArgs to Anchor: tyche_start_addr: %x, region_size: %lx, entry_addr: %lx, hartid: %x, manifest_addr: %p", TYCHE_LOAD_ADDRESS, manifest->next_addr - TYCHE_LOAD_ADDRESS - 1, tlr->tyche_entry, hartid, manifest);
+
+	enter_anchor((unsigned long)TYCHE_LOAD_ADDRESS, manifest->next_addr - TYCHE_LOAD_ADDRESS - 1, tlr->tyche_entry, hartid, manifest);
+
+	// ((void (*) (unsigned long, struct tyche_manifest*))tyche_start)(hartid, manifest);
 
 #else 
 	sbi_hart_switch_mode(hartid, scratch->next_arg1, scratch->next_addr, scratch->next_mode, FALSE);
@@ -555,11 +601,15 @@ static void __noreturn init_warmboot(struct sbi_scratch *scratch, u32 hartid)
 		init_warm_startup(scratch, hartid);
 
 #ifdef LAUNCH_TYCHE
-    void* tyche_start = (void*)scratch->next_addr;
+    //void* tyche_start = (void*)scratch->next_addr;
     
     //sbi_timer_event_start(100000);
     //In the following - manifest_addr is not really needed - Tyche won't do anything with it 
-    ((void (*) (unsigned long, struct tyche_manifest*))tyche_start)(hartid,(struct tyche_manifest*)TYCHE_MANIFEST_ADDRESS);
+    //((void (*) (unsigned long, struct tyche_manifest*))tyche_start)(hartid,(struct tyche_manifest*)TYCHE_MANIFEST_ADDRESS);
+	
+	struct tyche_manifest* manifest = (struct tyche_manifest*) TYCHE_MANIFEST_ADDRESS; 
+
+	enter_anchor((unsigned long)TYCHE_LOAD_ADDRESS, manifest->next_addr - TYCHE_LOAD_ADDRESS - 1, scratch->next_addr, hartid, (struct tyche_manifest*)TYCHE_MANIFEST_ADDRESS);
 #else
 	sbi_hart_switch_mode(hartid, scratch->next_arg1,
 			     scratch->next_addr,
